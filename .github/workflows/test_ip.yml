@@ -1,0 +1,22 @@
+name: Test ModelScope IP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test_ip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Runner Public IP
+        run: |
+          echo "=== RUNNER IP AND LOCATION ==="
+          curl -s https://ipinfo.io/json
+          echo ""
+
+      - name: Test ModelScope API from Azure Cloud IP
+        run: |
+          echo "=== TESTING MODELSCOPE API ==="
+          curl -i -s -X POST https://api-inference.modelscope.ai/v1/chat/completions \
+            -H "Authorization: Bearer ms-1f06697f-e237-457e-9992-74a8376c013c" \
+            -H "Content-Type: application/json" \
+            -d '{"model": "Qwen/Qwen3.8-27B", "messages": [{"role": "user", "content": "hi"}]}'
