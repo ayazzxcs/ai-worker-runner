@@ -1,0 +1,57 @@
+name: Serverless AI Video Render Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Job ID matching GitHub Release tag'
+        required: true
+        type: string
+      vf_filter:
+        description: 'FFmpeg video filter string'
+        required: false
+        default: ''
+        type: string
+      duration:
+        description: 'Duration in seconds'
+        required: false
+        default: '0'
+        type: string
+      seek_offset:
+        description: 'Seek offset in seconds'
+        required: false
+        default: '0'
+        type: string
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Cut & Subtitles from Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Downloading inputs for job ${{ inputs.job_id }}..."
+          gh release download "${{ inputs.job_id }}" --repo "${{ github.repository }}"
+
+      - name: Run Video Render
+        run: |
+          python worker_render.py "${{ inputs.job_id }}" "${{ inputs.vf_filter }}" "${{ inputs.duration }}" "${{ inputs.seek_offset }}"
+
+      - name: Upload Rendered Video to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Uploading rendered.mp4 to release ${{ inputs.job_id }}..."
+          gh release upload "${{ inputs.job_id }}" rendered.mp4 --repo "${{ github.repository }}" --clobber
