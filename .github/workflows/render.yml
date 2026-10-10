@@ -38,6 +38,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+
       - name: Download Cut & Subtitles from Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
