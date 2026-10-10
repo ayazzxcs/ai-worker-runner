@@ -14,7 +14,6 @@ def main():
     language = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] not in ("auto", "", "None") else None
     beam_size = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4].isdigit() else 1
 
-    # Find downloaded audio file
     audio_files = []
     for ext in ("*.mp3", "*.wav", "*.m4a", "*.ogg", "*.flac", "*.aac"):
         audio_files.extend(glob.glob(ext))
@@ -36,28 +35,30 @@ def main():
         "word_timestamps": True,
         "vad_filter": True,
         "vad_parameters": dict(
-            threshold=0.35,
-            min_silence_duration_ms=600,
-            speech_pad_ms=250,
+            threshold=0.25,
+            min_silence_duration_ms=500,
+            speech_pad_ms=300,
         ),
         "temperature": 0.0,
         "condition_on_previous_text": False,
-        "initial_prompt": "Transcribe spoken dialogue including laughter, giggles, [laughter], haha, chuckling, applause, crying, and emotional reactions.",
+        "initial_prompt": "Transcribe spoken dialogue, lyrics, emotional reactions, and speech.",
     }
     if language:
         kwargs["language"] = language
 
-    print(f"Transcribing audio with VAD filter...")
+    print("Transcribing audio with VAD filter...")
     segments_gen, info = model.transcribe(audio_path, **kwargs)
 
     out = []
     texts = []
     for seg in segments_gen:
+        clean_text = seg.text.strip()
+        if not clean_text:
+            continue
         words = [
             {"word": w.word, "start": round(w.start, 2), "end": round(w.end, 2)}
             for w in (getattr(seg, "words", None) or [])
         ]
-        clean_text = seg.text.strip()
         out.append({
             "start": round(seg.start, 2),
             "end": round(seg.end, 2),
@@ -65,6 +66,29 @@ def main():
             "words": words
         })
         texts.append(clean_text)
+
+    # Fallback: if VAD filtered everything out, retry without VAD (essential for music videos / songs / soft speech)
+    if not out:
+        print("VAD returned 0 segments; retrying transcription with vad_filter=False (music/speech fallback)...")
+        kwargs_no_vad = dict(kwargs)
+        kwargs_no_vad["vad_filter"] = False
+        kwargs_no_vad.pop("vad_parameters", None)
+        segments_gen, info = model.transcribe(audio_path, **kwargs_no_vad)
+        for seg in segments_gen:
+            clean_text = seg.text.strip()
+            if not clean_text:
+                continue
+            words = [
+                {"word": w.word, "start": round(w.start, 2), "end": round(w.end, 2)}
+                for w in (getattr(seg, "words", None) or [])
+            ]
+            out.append({
+                "start": round(seg.start, 2),
+                "end": round(seg.end, 2),
+                "text": clean_text,
+                "words": words
+            })
+            texts.append(clean_text)
 
     result = {
         "job_id": job_id,
